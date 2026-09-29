@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Organism } from '@/types/ecosystem';
 import { getSpeciesById, SPECIES } from '@/data/species';
 import { AQUARIUM_BOUNDS } from '@/store/useEcosystemStore';
+import { chance, range, type Rng } from '@/utils/random';
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -83,8 +84,20 @@ function findNearestDead(
   return nearest;
 }
 
+/** 以 2% 的概率随机改变一次游走方向。 */
+function maybeWander(rng: Rng, velocity: THREE.Vector3, speed: number): void {
+  if (chance(rng, 0.02)) {
+    velocity.set(
+      range(rng, -0.5, 0.5) * speed,
+      range(rng, -0.5, 0.5) * speed * 0.5,
+      range(rng, -0.5, 0.5) * speed,
+    );
+  }
+}
+
 export function simulateStep(
   organisms: Organism[],
+  rng: Rng,
 ): {
   updates: { id: string; updates: Partial<Organism> }[];
   toRemove: string[];
@@ -130,13 +143,7 @@ export function simulateStep(
         }
       } else {
         organismUpdate.state = 'wandering';
-        if (Math.random() < 0.02) {
-          newVelocity.set(
-            (Math.random() - 0.5) * species.speed,
-            (Math.random() - 0.5) * species.speed * 0.5,
-            (Math.random() - 0.5) * species.speed,
-          );
-        }
+        maybeWander(rng, newVelocity, species.speed);
       }
 
       newPosition.add(newVelocity);
@@ -197,13 +204,7 @@ export function simulateStep(
         }
       } else {
         organismUpdate.state = 'wandering';
-        if (Math.random() < 0.02) {
-          newVelocity.set(
-            (Math.random() - 0.5) * species.speed,
-            (Math.random() - 0.5) * species.speed * 0.5,
-            (Math.random() - 0.5) * species.speed,
-          );
-        }
+        maybeWander(rng, newVelocity, species.speed);
       }
 
       newPosition.add(newVelocity);
@@ -249,7 +250,7 @@ export function simulateStep(
 
     if (
       energy > species.energyValue * 0.8 &&
-      Math.random() < species.reproductionRate * 0.1
+      chance(rng, species.reproductionRate * 0.1)
     ) {
       const aliveCount = organisms.filter(
         (o) => o.speciesId === organism.speciesId && !toRemove.has(o.id),
@@ -259,9 +260,9 @@ export function simulateStep(
           .clone()
           .add(
             new THREE.Vector3(
-              (Math.random() - 0.5) * 1.5,
-              Math.random() * 0.5,
-              (Math.random() - 0.5) * 1.5,
+              range(rng, -0.5, 0.5) * 1.5,
+              range(rng, 0, 0.5),
+              range(rng, -0.5, 0.5) * 1.5,
             ),
           );
         toAdd.push({ speciesId: organism.speciesId, position: offspringPos });

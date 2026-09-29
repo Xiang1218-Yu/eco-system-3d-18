@@ -7,6 +7,7 @@ import { Organism3D } from '@/components/Organisms/Organism';
 import { useEcosystemStore } from '@/store/useEcosystemStore';
 import { AQUARIUM_BOUNDS } from '@/store/useEcosystemStore';
 import { getSpeciesById } from '@/data/species';
+import { range, uiRng } from '@/utils/random';
 
 function Glass() {
   const thickness = 0.08;
@@ -124,13 +125,15 @@ function Substrate() {
       new THREE.Color('#b8865a'),
     ];
 
+    // 纯渲染装饰：使用与实验隔离的 uiRng，重置种子不会让布景可复现，
+    // 但布景随机也绝不会污染模拟状态序列。
     for (let i = 0; i < count; i++) {
       positions.push(
-        AQUARIUM_BOUNDS.minX + 0.1 + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX - 0.2),
-        AQUARIUM_BOUNDS.minY + 0.02 + Math.random() * 0.06,
-        AQUARIUM_BOUNDS.minZ + 0.1 + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ - 0.2),
+        range(uiRng, AQUARIUM_BOUNDS.minX + 0.1, AQUARIUM_BOUNDS.maxX - 0.1),
+        AQUARIUM_BOUNDS.minY + 0.02 + uiRng.next() * 0.06,
+        range(uiRng, AQUARIUM_BOUNDS.minZ + 0.1, AQUARIUM_BOUNDS.maxZ - 0.1),
       );
-      const color = sandColors[Math.floor(Math.random() * sandColors.length)];
+      const color = sandColors[Math.floor(uiRng.next() * sandColors.length)];
       colors.push(color.r, color.g, color.b);
     }
 
@@ -188,14 +191,15 @@ function Bubbles() {
     const siz: number[] = [];
     const pha: number[] = [];
 
+    // 与实验隔离的装饰随机，见 Substrate。
     for (let i = 0; i < count; i++) {
       pos.push(
-        AQUARIUM_BOUNDS.minX + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX),
-        AQUARIUM_BOUNDS.minY + Math.random() * (AQUARIUM_BOUNDS.maxY - AQUARIUM_BOUNDS.minY),
-        AQUARIUM_BOUNDS.minZ + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ),
+        range(uiRng, AQUARIUM_BOUNDS.minX, AQUARIUM_BOUNDS.maxX),
+        range(uiRng, AQUARIUM_BOUNDS.minY, AQUARIUM_BOUNDS.maxY),
+        range(uiRng, AQUARIUM_BOUNDS.minZ, AQUARIUM_BOUNDS.maxZ),
       );
-      siz.push(0.02 + Math.random() * 0.04);
-      pha.push(Math.random() * Math.PI * 2);
+      siz.push(0.02 + uiRng.next() * 0.04);
+      pha.push(uiRng.next() * Math.PI * 2);
     }
 
     return { positions: new Float32Array(pos), sizes: new Float32Array(siz), phases: pha };
@@ -212,9 +216,9 @@ function Bubbles() {
         if ((posAttr.array as Float32Array)[idx + 1] > AQUARIUM_BOUNDS.maxY) {
           (posAttr.array as Float32Array)[idx + 1] = AQUARIUM_BOUNDS.minY;
           (posAttr.array as Float32Array)[idx] =
-            AQUARIUM_BOUNDS.minX + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX);
+            range(uiRng, AQUARIUM_BOUNDS.minX, AQUARIUM_BOUNDS.maxX);
           (posAttr.array as Float32Array)[idx + 2] =
-            AQUARIUM_BOUNDS.minZ + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ);
+            range(uiRng, AQUARIUM_BOUNDS.minZ, AQUARIUM_BOUNDS.maxZ);
         }
       }
       posAttr.needsUpdate = true;

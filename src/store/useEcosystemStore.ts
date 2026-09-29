@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import * as THREE from 'three';
 import type { Organism, EcosystemStats, Species } from '@/types/ecosystem';
 import { getSpeciesById, SPECIES } from '@/data/species';
+import {
+  createIdFactory,
+  createRng,
+  DEFAULT_SEED,
+  range,
+  type IdFactory,
+  type Rng,
+} from '@/utils/random';
 
 interface EcosystemStore {
   organisms: Organism[];
@@ -10,6 +18,8 @@ interface EcosystemStore {
   isRunning: boolean;
   simulationTime: number;
   showLabels: boolean;
+  /** 当前实验种子；相同种子重置后产生完全一致的状态序列。 */
+  seed: number;
 
   addOrganism: (speciesId: string, position?: THREE.Vector3) => void;
   removeOrganism: (organismId: string) => void;
@@ -19,8 +29,12 @@ interface EcosystemStore {
   toggleSimulation: () => void;
   incrementTime: () => void;
   resetEcosystem: () => void;
+  /** 设置新种子并立即以该种子重置实验。 */
+  setSeed: (seed: number) => void;
   toggleLabels: () => void;
   getStats: () => EcosystemStats;
+  /** 模拟循环使用的可注入随机源（不放响应式状态，避免无谓渲染）。 */
+  getRng: () => Rng;
   batchUpdateOrganisms: (updates: { id: string; updates: Partial<Organism> }[]) => void;
   batchRemoveOrganisms: (ids: string[]) => void;
 }
@@ -34,44 +48,51 @@ const AQUARIUM_BOUNDS = {
   maxZ: 2,
 };
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 11);
-}
+// 模拟随机源与确定性 ID 工厂都是模块级可变实例：属于实验执行状态而非 UI
+// 状态，因此不放进 zustand 响应式数据里。
+let simulationRng: Rng = createRng(DEFAULT_SEED);
+const organismIdFactory: IdFactory = createIdFactory();
 
-function randomPosition(species: Species): THREE.Vector3 {
+function randomPosition(rng: Rng, species: Species): THREE.Vector3 {
   const isProducer = species.trophicLevel === 'producer';
   const minY = isProducer ? AQUARIUM_BOUNDS.minY : AQUARIUM_BOUNDS.minY + 0.3;
   const maxY = isProducer ? AQUARIUM_BOUNDS.minY + 0.5 : AQUARIUM_BOUNDS.maxY - 0.3;
 
   return new THREE.Vector3(
-    AQUARIUM_BOUNDS.minX + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX),
-    minY + Math.random() * (maxY - minY),
-    AQUARIUM_BOUNDS.minZ + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ),
+    range(rng, AQUARIUM_BOUNDS.minX, AQUARIUM_BOUNDS.maxX),
+    range(rng, minY, maxY),
+    range(rng, AQUARIUM_BOUNDS.minZ, AQUARIUM_BOUNDS.maxZ),
   );
 }
 
-function createOrganism(speciesId: string, position?: THREE.Vector3): Organism | null {
+function createOrganism(rng: Rng, speciesId: string, position?: THREE.Vector3): Organism | null {
   const species = getSpeciesById(speciesId);
   if (!species) return null;
 
-  const pos = position || randomPosition(species);
+  const pos = position ? position.clone() : randomPosition(rng, species);
 
   return {
-    id: generateId(),
+    id: organismIdFactory.next(),
     speciesId,
     position: pos,
     velocity: new THREE.Vector3(
-      (Math.random() - 0.5) * species.speed,
-      (Math.random() - 0.5) * species.speed * 0.5,
-      (Math.random() - 0.5) * species.speed,
+      range(rng, -0.5, 0.5) * species.speed,
+      range(rng, -0.5, 0.5) * species.speed * 0.5,
+      range(rng, -0.5, 0.5) * species.speed,
     ),
-    energy: species.energyValue * (0.7 + Math.random() * 0.3),
-    age: Math.random() * species.lifespan * 0.3,
+    energy: species.energyValue * range(rng, 0.7, 1),
+    age: rng.next() * species.lifespan * 0.3,
     state: 'idle',
     targetId: null,
-    rotation: Math.random() * Math.PI * 2,
-    scale: 0.8 + Math.random() * 0.4,
+    rotation: rng.next() * Math.PI * 2,
+    scale: range(rng, 0.8, 1.2),
   };
+}
+
+/** 以指定种子重启实验随机流：重置 PRNG 与 ID 计数器。 */
+function reseed(seed: number) {
+  simulationRng = createRng(seed >>> 0);
+  organismIdFactory.reset();
 }
 
 export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
@@ -81,6 +102,7 @@ export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
   isRunning: true,
   simulationTime: 0,
   showLabels: true,
+  seed: DEFAULT_SEED,
 
   addOrganism: (speciesId, position) => {
     const state = get();
@@ -90,7 +112,7 @@ export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
     const currentCount = state.organisms.filter((o) => o.speciesId === speciesId).length;
     if (currentCount >= species.maxPopulation) return;
 
-    const organism = createOrganism(speciesId, position);
+    const organism = createOrganism(simulationRng, speciesId, position);
     if (organism) {
       set((prev) => ({ organisms: [...prev.organisms, organism] }));
     }
@@ -147,7 +169,23 @@ export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
   },
 
   resetEcosystem: () => {
+    // 用当前种子重置整个实验：清空生物、随机流与 ID 计数回到起点，
+    // 从而能完整复现这颗种子的状态序列。
+    reseed(get().seed);
     set({
+      organisms: [],
+      selectedSpeciesId: null,
+      selectedOrganismId: null,
+      simulationTime: 0,
+      isRunning: true,
+    });
+  },
+
+  setSeed: (seed) => {
+    const normalized = seed >>> 0;
+    reseed(normalized);
+    set({
+      seed: normalized,
       organisms: [],
       selectedSpeciesId: null,
       selectedOrganismId: null,
@@ -159,6 +197,8 @@ export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
   toggleLabels: () => {
     set((prev) => ({ showLabels: !prev.showLabels }));
   },
+
+  getRng: () => simulationRng,
 
   getStats: () => {
     const state = get();
