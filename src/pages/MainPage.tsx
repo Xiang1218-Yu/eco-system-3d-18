@@ -14,7 +14,6 @@ export function MainPage() {
 
   const selectedSpeciesId = useEcosystemStore((s) => s.selectedSpeciesId);
   const addOrganism = useEcosystemStore((s) => s.addOrganism);
-  const setSelectedSpecies = useEcosystemStore((s) => s.setSelectedSpecies);
 
   useEffect(() => {
     const canvas = document.querySelector('canvas');

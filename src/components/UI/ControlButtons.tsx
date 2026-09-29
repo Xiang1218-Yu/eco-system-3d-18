@@ -1,4 +1,5 @@
 import { GlassCard } from '@/components/common/GlassCard';
+import { SeedControl } from '@/components/UI/SeedControl';
 import { useEcosystemStore } from '@/store/useEcosystemStore';
 import { Play, Pause, RotateCcw, Eye, EyeOff, Sparkles } from 'lucide-react';
 
@@ -44,13 +45,15 @@ export function ControlButtons() {
           </button>
 
           <button
-            onClick={resetEcosystem}
+            onClick={() => resetEcosystem()}
             className="p-2 rounded-xl hover:bg-white/10 transition-colors text-white"
-            title="重置生态缸"
+            title="重置生态缸（当前种子重新开始）"
           >
             <RotateCcw size={18} />
           </button>
         </div>
+
+        <SeedControl />
       </GlassCard>
     </div>
   );

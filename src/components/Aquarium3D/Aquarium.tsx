@@ -1,12 +1,13 @@
-import { useRef, useMemo, useState } from 'react';
+import { useRef, useMemo } from 'react';
 import { Canvas, useFrame, ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 import { Organism3D } from '@/components/Organisms/Organism';
 import { useEcosystemStore } from '@/store/useEcosystemStore';
-import { AQUARIUM_BOUNDS } from '@/store/useEcosystemStore';
+import { AQUARIUM_BOUNDS } from '@/constants/aquarium';
 import { getSpeciesById } from '@/data/species';
+import { renderRandom } from '@/utils/random';
 
 function Glass() {
   const thickness = 0.08;
@@ -126,11 +127,11 @@ function Substrate() {
 
     for (let i = 0; i < count; i++) {
       positions.push(
-        AQUARIUM_BOUNDS.minX + 0.1 + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX - 0.2),
-        AQUARIUM_BOUNDS.minY + 0.02 + Math.random() * 0.06,
-        AQUARIUM_BOUNDS.minZ + 0.1 + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ - 0.2),
+        AQUARIUM_BOUNDS.minX + 0.1 + renderRandom.next() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX - 0.2),
+        AQUARIUM_BOUNDS.minY + 0.02 + renderRandom.next() * 0.06,
+        AQUARIUM_BOUNDS.minZ + 0.1 + renderRandom.next() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ - 0.2),
       );
-      const color = sandColors[Math.floor(Math.random() * sandColors.length)];
+      const color = sandColors[Math.floor(renderRandom.next() * sandColors.length)];
       colors.push(color.r, color.g, color.b);
     }
 
@@ -190,12 +191,12 @@ function Bubbles() {
 
     for (let i = 0; i < count; i++) {
       pos.push(
-        AQUARIUM_BOUNDS.minX + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX),
-        AQUARIUM_BOUNDS.minY + Math.random() * (AQUARIUM_BOUNDS.maxY - AQUARIUM_BOUNDS.minY),
-        AQUARIUM_BOUNDS.minZ + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ),
+        AQUARIUM_BOUNDS.minX + renderRandom.next() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX),
+        AQUARIUM_BOUNDS.minY + renderRandom.next() * (AQUARIUM_BOUNDS.maxY - AQUARIUM_BOUNDS.minY),
+        AQUARIUM_BOUNDS.minZ + renderRandom.next() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ),
       );
-      siz.push(0.02 + Math.random() * 0.04);
-      pha.push(Math.random() * Math.PI * 2);
+      siz.push(0.02 + renderRandom.next() * 0.04);
+      pha.push(renderRandom.next() * Math.PI * 2);
     }
 
     return { positions: new Float32Array(pos), sizes: new Float32Array(siz), phases: pha };
@@ -212,9 +213,9 @@ function Bubbles() {
         if ((posAttr.array as Float32Array)[idx + 1] > AQUARIUM_BOUNDS.maxY) {
           (posAttr.array as Float32Array)[idx + 1] = AQUARIUM_BOUNDS.minY;
           (posAttr.array as Float32Array)[idx] =
-            AQUARIUM_BOUNDS.minX + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX);
+            AQUARIUM_BOUNDS.minX + renderRandom.next() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX);
           (posAttr.array as Float32Array)[idx + 2] =
-            AQUARIUM_BOUNDS.minZ + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ);
+            AQUARIUM_BOUNDS.minZ + renderRandom.next() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ);
         }
       }
       posAttr.needsUpdate = true;
@@ -287,7 +288,6 @@ interface Aquarium3DProps {
 
 export function Aquarium3D({ onAquariumClick }: Aquarium3DProps) {
   const { organisms } = useEcosystemStore();
-  const selectedSpeciesId = useEcosystemStore((s) => s.selectedSpeciesId);
 
   return (
     <Canvas

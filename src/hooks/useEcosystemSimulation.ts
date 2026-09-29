@@ -22,8 +22,11 @@ export function useEcosystemSimulation() {
       if (isRunningRef.current && time - lastTimeRef.current > 60) {
         lastTimeRef.current = time;
 
-        const organisms = useEcosystemStore.getState().organisms;
-        const { updates, toRemove, toAdd } = simulateStep(organisms);
+        const state = useEcosystemStore.getState();
+        const { updates, toRemove, toAdd } = simulateStep(
+          state.organisms,
+          state.randomStreams.experiment,
+        );
 
         if (updates.length > 0) {
           batchUpdateOrganisms(updates);

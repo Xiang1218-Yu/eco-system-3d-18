@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import * as THREE from 'three';
-import type { Organism, EcosystemStats, Species } from '@/types/ecosystem';
+import type { Organism, EcosystemStats } from '@/types/ecosystem';
 import { getSpeciesById, SPECIES } from '@/data/species';
+import { AQUARIUM_BOUNDS } from '@/constants/aquarium';
+import { createOrganism } from '@/utils/organismFactory';
+import { createInitialOrganisms } from '@/utils/initialEcosystem';
+import { createRandomStreams, DEFAULT_SEED, type RandomStreams } from '@/utils/random';
 
 interface EcosystemStore {
   organisms: Organism[];
@@ -10,6 +14,10 @@ interface EcosystemStore {
   isRunning: boolean;
   simulationTime: number;
   showLabels: boolean;
+  /** 当前实验种子（uint32） */
+  seed: number;
+  /** 由当前种子派生的随机流（experiment / id / render 彼此独立） */
+  randomStreams: RandomStreams;
 
   addOrganism: (speciesId: string, position?: THREE.Vector3) => void;
   removeOrganism: (organismId: string) => void;
@@ -18,64 +26,38 @@ interface EcosystemStore {
   setSelectedOrganism: (organismId: string | null) => void;
   toggleSimulation: () => void;
   incrementTime: () => void;
-  resetEcosystem: () => void;
+  /**
+   * 重置生态缸。
+   * 不传参时用当前种子重新派生随机流（可复现同一条状态序列）；
+   * 传入新种子时切换种子并重新开始。
+   */
+  resetEcosystem: (seed?: number | string) => void;
+  /** 切换实验种子：重新派生随机流并生成该种子下的初始群落 */
+  setSeed: (seed: number | string) => void;
   toggleLabels: () => void;
   getStats: () => EcosystemStats;
   batchUpdateOrganisms: (updates: { id: string; updates: Partial<Organism> }[]) => void;
   batchRemoveOrganisms: (ids: string[]) => void;
 }
 
-const AQUARIUM_BOUNDS = {
-  minX: -4,
-  maxX: 4,
-  minY: -2,
-  maxY: 2,
-  minZ: -2,
-  maxZ: 2,
-};
-
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 11);
-}
-
-function randomPosition(species: Species): THREE.Vector3 {
-  const isProducer = species.trophicLevel === 'producer';
-  const minY = isProducer ? AQUARIUM_BOUNDS.minY : AQUARIUM_BOUNDS.minY + 0.3;
-  const maxY = isProducer ? AQUARIUM_BOUNDS.minY + 0.5 : AQUARIUM_BOUNDS.maxY - 0.3;
-
-  return new THREE.Vector3(
-    AQUARIUM_BOUNDS.minX + Math.random() * (AQUARIUM_BOUNDS.maxX - AQUARIUM_BOUNDS.minX),
-    minY + Math.random() * (maxY - minY),
-    AQUARIUM_BOUNDS.minZ + Math.random() * (AQUARIUM_BOUNDS.maxZ - AQUARIUM_BOUNDS.minZ),
-  );
-}
-
-function createOrganism(speciesId: string, position?: THREE.Vector3): Organism | null {
-  const species = getSpeciesById(speciesId);
-  if (!species) return null;
-
-  const pos = position || randomPosition(species);
-
+/**
+ * 由种子构造一份全新的随机状态：重新派生随机流并生成初始群落。
+ * 同一种子多次调用会得到逐字段一致的初始生物。
+ */
+function createSeededState(seed: number | string): Pick<
+  EcosystemStore,
+  'organisms' | 'seed' | 'randomStreams'
+> {
+  const randomStreams = createRandomStreams(seed);
   return {
-    id: generateId(),
-    speciesId,
-    position: pos,
-    velocity: new THREE.Vector3(
-      (Math.random() - 0.5) * species.speed,
-      (Math.random() - 0.5) * species.speed * 0.5,
-      (Math.random() - 0.5) * species.speed,
-    ),
-    energy: species.energyValue * (0.7 + Math.random() * 0.3),
-    age: Math.random() * species.lifespan * 0.3,
-    state: 'idle',
-    targetId: null,
-    rotation: Math.random() * Math.PI * 2,
-    scale: 0.8 + Math.random() * 0.4,
+    organisms: createInitialOrganisms(randomStreams),
+    seed: randomStreams.seed,
+    randomStreams,
   };
 }
 
 export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
-  organisms: [],
+  ...createSeededState(DEFAULT_SEED),
   selectedSpeciesId: null,
   selectedOrganismId: null,
   isRunning: true,
@@ -90,7 +72,11 @@ export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
     const currentCount = state.organisms.filter((o) => o.speciesId === speciesId).length;
     if (currentCount >= species.maxPopulation) return;
 
-    const organism = createOrganism(speciesId, position);
+    const organism = createOrganism(
+      speciesId,
+      state.randomStreams,
+      position,
+    );
     if (organism) {
       set((prev) => ({ organisms: [...prev.organisms, organism] }));
     }
@@ -146,14 +132,21 @@ export const useEcosystemStore = create<EcosystemStore>((set, get) => ({
     set((prev) => ({ simulationTime: prev.simulationTime + 1 }));
   },
 
-  resetEcosystem: () => {
-    set({
-      organisms: [],
+  resetEcosystem: (seed) => {
+    set((prev) => ({
+      ...createSeededState(seed === undefined ? prev.seed : seed),
       selectedSpeciesId: null,
       selectedOrganismId: null,
       simulationTime: 0,
       isRunning: true,
-    });
+    }));
+  },
+
+  setSeed: (seed) => {
+    set(() => ({
+      ...createSeededState(seed),
+      simulationTime: 0,
+    }));
   },
 
   toggleLabels: () => {

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { Organism } from '@/types/ecosystem';
 import { getSpeciesById, SPECIES } from '@/data/species';
-import { AQUARIUM_BOUNDS } from '@/store/useEcosystemStore';
+import { AQUARIUM_BOUNDS } from '@/constants/aquarium';
+import type { RandomSource } from '@/utils/random';
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -85,6 +86,7 @@ function findNearestDead(
 
 export function simulateStep(
   organisms: Organism[],
+  rng: RandomSource,
 ): {
   updates: { id: string; updates: Partial<Organism> }[];
   toRemove: string[];
@@ -130,11 +132,11 @@ export function simulateStep(
         }
       } else {
         organismUpdate.state = 'wandering';
-        if (Math.random() < 0.02) {
+        if (rng.next() < 0.02) {
           newVelocity.set(
-            (Math.random() - 0.5) * species.speed,
-            (Math.random() - 0.5) * species.speed * 0.5,
-            (Math.random() - 0.5) * species.speed,
+            (rng.next() - 0.5) * species.speed,
+            (rng.next() - 0.5) * species.speed * 0.5,
+            (rng.next() - 0.5) * species.speed,
           );
         }
       }
@@ -197,11 +199,11 @@ export function simulateStep(
         }
       } else {
         organismUpdate.state = 'wandering';
-        if (Math.random() < 0.02) {
+        if (rng.next() < 0.02) {
           newVelocity.set(
-            (Math.random() - 0.5) * species.speed,
-            (Math.random() - 0.5) * species.speed * 0.5,
-            (Math.random() - 0.5) * species.speed,
+            (rng.next() - 0.5) * species.speed,
+            (rng.next() - 0.5) * species.speed * 0.5,
+            (rng.next() - 0.5) * species.speed,
           );
         }
       }
@@ -249,7 +251,7 @@ export function simulateStep(
 
     if (
       energy > species.energyValue * 0.8 &&
-      Math.random() < species.reproductionRate * 0.1
+      rng.next() < species.reproductionRate * 0.1
     ) {
       const aliveCount = organisms.filter(
         (o) => o.speciesId === organism.speciesId && !toRemove.has(o.id),
@@ -259,9 +261,9 @@ export function simulateStep(
           .clone()
           .add(
             new THREE.Vector3(
-              (Math.random() - 0.5) * 1.5,
-              Math.random() * 0.5,
-              (Math.random() - 0.5) * 1.5,
+              (rng.next() - 0.5) * 1.5,
+              rng.next() * 0.5,
+              (rng.next() - 0.5) * 1.5,
             ),
           );
         toAdd.push({ speciesId: organism.speciesId, position: offspringPos });
